@@ -1,0 +1,39 @@
+{
+    "name": "veridu/idos-manager",
+    "description": "Veridu idOS Process Manager.",
+    "license": "proprietary",
+    "type": "project",
+    "keywords": [],
+    "authors": [
+        {
+            "name": "Flavio Heleno",
+            "email": "flavio@veridu.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "App\\": "app",
+            "Test\\": "test"
+        }
+    },
+    "require": {
+        "monolog/monolog": "^1.13",
+        "symfony/console": "^3.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "@stable",
+        "phpunit/dbunit": "@stable",
+        "phpmd/phpmd" : "@stable",
+        "phploc/phploc": "@stable",
+        "sebastian/phpcpd": "@stable",
+        "squizlabs/php_codesniffer": "@stable",
+        "friendsofphp/php-cs-fixer": "@stable",
+        "sensiolabs/security-checker": "@stable",
+        "psy/psysh": "@stable",
+        "theseer/phpdox": "@stable",
+        "ext-xsl": "*"
+    },
+    "config": {
+        "optimize-autoloader": false
+    }
+}
