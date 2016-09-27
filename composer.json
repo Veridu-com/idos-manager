@@ -21,17 +21,18 @@
         "symfony/console": "^3.1"
     },
     "require-dev": {
-        "phpunit/phpunit": "@stable",
-        "phpunit/dbunit": "@stable",
-        "phpmd/phpmd" : "@stable",
-        "phploc/phploc": "@stable",
-        "sebastian/phpcpd": "@stable",
-        "squizlabs/php_codesniffer": "@stable",
+        "ext-xsl": "*",
         "friendsofphp/php-cs-fixer": "@stable",
-        "sensiolabs/security-checker": "@stable",
+        "pdepend/pdepend": "@stable",
+        "phploc/phploc": "@stable",
+        "phpmd/phpmd" : "@stable",
+        "phpunit/dbunit": "@stable",
+        "phpunit/phpunit": "@stable",
         "psy/psysh": "@stable",
-        "theseer/phpdox": "@stable",
-        "ext-xsl": "*"
+        "sebastian/phpcpd": "@stable",
+        "sensiolabs/security-checker": "@stable",
+        "squizlabs/php_codesniffer": "@stable",
+        "theseer/phpdox": "@stable"
     },
     "config": {
         "optimize-autoloader": false

@@ -1,5 +1,8 @@
 *.log
-*.sublime-project
-*.sublime-workspace
-sftp-config.json
+*.sublime-*
+.php_cs
+config/settings.php
+config/testing.php
+environment.php
 vendor/
+VeriduRuleset.xml

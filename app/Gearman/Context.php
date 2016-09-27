@@ -3,11 +3,10 @@
  * Copyright (c) 2012-2016 Veridu Ltd <https://veridu.com>
  * All rights reserved.
  */
-declare(strict_types=1);
+declare(strict_types = 1);
 
 namespace App\Gearman;
 
-use App\Async\Handler;
 use App\ThreadSafe\Logger;
 
 /**
@@ -37,7 +36,7 @@ class Context extends \Worker {
      * Class constructor.
      *
      * @param App\ThreadSafe\Logger $logger
-     * @param array $config
+     * @param array                 $config
      *
      * @return void
      */
@@ -90,7 +89,7 @@ class Context extends \Worker {
     }
 
     /**
-     * Returns a static instance of GearmanWorker
+     * Returns a static instance of GearmanWorker.
      *
      * @return \GearmanWorker
      */

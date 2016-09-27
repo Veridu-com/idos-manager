@@ -3,7 +3,7 @@
  * Copyright (c) 2012-2016 Veridu Ltd <https://veridu.com>
  * All rights reserved.
  */
-declare(strict_types=1);
+declare(strict_types = 1);
 
 namespace App\Gearman;
 
@@ -14,13 +14,13 @@ use App\Async;
  */
 class Thread extends \Threaded {
     /**
-     * Max number of open streams
+     * Max number of open streams.
      *
      * @const MAX_STREAMS
      */
     const MAX_STREAMS = 500;
     /**
-     * Worker Function Name
+     * Worker Function Name.
      *
      * @var string
      */
@@ -45,42 +45,45 @@ class Thread extends \Threaded {
      * @return void
      */
     public function run() {
-        $logger = $this->worker->getLogger();
-        $gearman = $this->worker->getGearman();
+        $logger   = $this->worker->getLogger();
+        $gearman  = $this->worker->getGearman();
         $threadId = $this->worker->getThreadId();
-        $storage = [];
-        $request = [];
-        $stats = [
+        $storage  = [];
+        $request  = [];
+        $stats    = [
             'first' => null,
-            'last' => null,
+            'last'  => null,
             'count' => 0
         ];
 
         $logger->debug(sprintf('[%lu] Registering Worker Function', $threadId));
 
         // Register Thread's Worker Function
-        $gearman->addFunction($this->functionName, function (\GearmanJob $job) use ($logger, $threadId, &$storage, &$stats) {
-            if ($stats['first'] === null) {
-                $stats['first'] = microtime(true);
-            }
-            $stats['count']++;
-            $logger->debug(sprintf('[%lu] Work!', $threadId));
-            $stream = stream_socket_client(
-                '190.98.170.59:80',
-                // '192.168.0.2:80',
-                $errNum,
-                $errStr,
-                10,
-                STREAM_CLIENT_ASYNC_CONNECT | STREAM_CLIENT_CONNECT
-            );
-            if ($stream) {
-                $logger->debug('Async Stream Opened!');
-                $storage[] = $stream;
-                $job->sendComplete('done');
-            } else {
-                $logger->debug('Failed to open Async Stream!');
-                $job->sendFail();
-            }
+        $gearman->addFunction(
+            $this->functionName, function (\GearmanJob $job) use ($logger, $threadId, &$storage, &$stats) {
+                if ($stats['first'] === null) {
+                    $stats['first'] = microtime(true);
+                }
+
+                $stats['count']++;
+                $logger->debug(sprintf('[%lu] Work!', $threadId));
+                $stream = stream_socket_client(
+                    '190.98.170.59:80',
+                    // '192.168.0.2:80',
+                    $errNum,
+                    $errStr,
+                    10,
+                    STREAM_CLIENT_ASYNC_CONNECT | STREAM_CLIENT_CONNECT
+                );
+                if ($stream) {
+                    $logger->debug('Async Stream Opened!');
+                    $storage[] = $stream;
+                    $job->sendComplete('done');
+                } else {
+                    $logger->debug('Failed to open Async Stream!');
+                    $job->sendFail();
+                }
+
             // $stream = new Async\Stream('190.98.170.59:80');
             // $stream->setId(1);
             // if ($stream->isOpen()) {
@@ -92,16 +95,20 @@ class Thread extends \Threaded {
             //     // send job back to queue!
             //     $job->sendFail();
             // }
-            $stats['last'] = microtime(true);
-        });
+                $stats['last'] = microtime(true);
+            }
+        );
 
         $logger->debug(sprintf('[%lu] Registering Ping Function', $threadId));
 
         // Register Thread's Ping Function
-        $gearman->addFunction('ping', function (\GearmanJob $job) use ($logger, $threadId) {
-            $logger->debug(sprintf('[%lu] Ping!', $threadId));
-            return 'pong';
-        });
+        $gearman->addFunction(
+            'ping', function (\GearmanJob $job) use ($logger, $threadId) {
+                $logger->debug(sprintf('[%lu] Ping!', $threadId));
+
+                return 'pong';
+            }
+        );
 
         $logger->debug(sprintf('[%lu] Entering Gearman Worker Loop', $threadId));
 
@@ -114,7 +121,7 @@ class Thread extends \Threaded {
             $logger->debug(sprintf('Async Streams: %d', count($storage)));
             do {
                 if (count($storage)) {
-                    $read = $storage;
+                    $read  = $storage;
                     $write = $storage;
                     // $read = [];
                     // $write = [];

@@ -3,22 +3,22 @@
  * Copyright (c) 2012-2016 Veridu Ltd <https://veridu.com>
  * All rights reserved.
  */
-declare(strict_types=1);
+
+declare(strict_types = 1);
 
 namespace App;
 
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Command definition for Process-based Daemon
+ * Command definition for Process-based Daemon.
  */
 class ProcessDaemon extends Command {
     /**
-     * Max number of open streams
+     * Max number of open streams.
      *
      * @const MAX_STREAMS
      */
@@ -40,9 +40,9 @@ class ProcessDaemon extends Command {
     }
 
     /**
-     * Command Execution
+     * Command Execution.
      *
-     * @param Symfony\Component\Console\Input\InputInterface $input
+     * @param Symfony\Component\Console\Input\InputInterface   $input
      * @param Symfony\Component\Console\Output\OutputInterface $outpput
      *
      * @return void
@@ -51,7 +51,8 @@ class ProcessDaemon extends Command {
         $logger = new ThreadSafe\Logger();
         $config = [
             'servers' => [
-                ['172.17.0.2', 4730]
+                // ['172.17.0.2', 4730]
+                ['localhost', 4730]
             ]
         ];
 
@@ -59,7 +60,7 @@ class ProcessDaemon extends Command {
 
         // Gearman Worker function name setup
         $functionName = $input->getArgument('functionName');
-        if ((empty($functionName)) || (! preg_match('/^[a-zA-Z_-]+$/', $functionName))) {
+        if ((empty($functionName)) || (! preg_match('/^[a-zA-Z0-9\._-]+$/', $functionName))) {
             $functionName = 'idos-delivery';
         }
 
@@ -86,56 +87,132 @@ class ProcessDaemon extends Command {
 
         $storage = [];
         $request = [];
-        $stats = [
+        $stats   = [
             'first' => null,
-            'last' => null,
+            'last'  => null,
             'count' => 0
         ];
 
         // Register Thread's Worker Function
-        $gearman->addFunction($functionName, function (\GearmanJob $job) use ($logger, &$storage, &$stats) {
-            if ($stats['first'] === null) {
-                $stats['first'] = microtime(true);
+        $gearman->addFunction(
+            $functionName,
+            function (\GearmanJob $job) use ($logger, &$storage, &$request, &$stats) {
+                $logger->debug('Got a new job!');
+                $jobData = json_decode($job->workload(), true);
+                if ($jobData === null) {
+                    $logger->debug('Invalid Job Workload!');
+                    $job->sendComplete('invalid');
+
+                    return;
+                }
+
+                print_r($jobData);
+
+                if ($stats['first'] === null) {
+                    $stats['first'] = microtime(true);
+                }
+
+                $url = parse_url($jobData['url']);
+
+                if (! isset($url['port'])) {
+                    $url['port'] = 443;
+                }
+
+                $host = sprintf('ssl://%s:%d', $url['host'], $url['port']);
+                // FIXME
+                $host = '127.0.0.1:8081';
+
+                $uri = '/';
+                if (isset($url['path'])) {
+                    $uri = $url['path'];
+                }
+
+                if (isset($url['query'])) {
+                    $uri = sprintf('%s?%s', $uri, $url['query']);
+                }
+
+                if (isset($url['fragment'])) {
+                    $uri = sprintf('%s#%s', $uri, $url['fragment']);
+                }
+
+                $uri = '/index.php/1.0/scrape';
+
+                // FIXME
+                $jobData['user'] = 'ruth';
+                $jobData['pass'] = 'htur';
+                $authorization = base64_encode(sprintf('%s:%s', $jobData['user'], $jobData['pass']));
+                $body = json_encode($jobData['handler']);
+                $header = implode(
+                    "\r\n",
+                    [
+                        sprintf('POST %s HTTP/1.1', $uri),
+                        'Accept-Language: en-US,en;q=0.8',
+                        'Upgrade-Insecure-Requests: 1',
+                        'User-Agent: idOS-Manager/1.0',
+                        'Accept: application/json;q=0.9,*/*;q=0.8',
+                        'Accept-Encoding: gzip, deflate, sdch, br',
+                        sprintf('Authorization: Basic %s', $authorization),
+                        // sprintf('Host: %s', $url['host']),
+                        'Host: localhost',
+                        'Connection: close',
+                        sprintf('Content-Length: %d', strlen($body)),
+                        'Content-Type: application/json; charset=utf-8',
+                        'Cache-Control: no-store,no-cache'
+                    ]
+                );
+
+                $stats['count']++;
+                $stream = stream_socket_client(
+                    $host,
+                    $errNum,
+                    $errStr,
+                    10,
+                    STREAM_CLIENT_ASYNC_CONNECT | STREAM_CLIENT_CONNECT
+                );
+                if ($stream) {
+                    $logger->debug('Async Stream Opened!');
+                    $storage[] = $stream;
+                    $request[] = implode(
+                        "\r\n",
+                        [
+                            $header,
+                            '',
+                            $body
+                        ]
+                    );
+                    $job->sendComplete('done');
+                } else {
+                    $logger->debug('Failed to open Async Stream!');
+                    $logger->error($errStr);
+                    $job->sendFail();
+                }
+
+                // $stream = new Async\Stream('190.98.170.59:80');
+                // $stream->setId(1);
+                // if ($stream->isOpen()) {
+                //     $logger->debug('Async Stream Opened!');
+                //     $handler->add($stream);
+                //     $job->sendComplete('done');
+                // } else {
+                //     $logger->debug('Failed to open Async Stream!');
+                //     // send job back to queue!
+                //     $job->sendFail();
+                // }
+                $stats['last'] = microtime(true);
             }
-            $stats['count']++;
-            // $logger->debug('Work!');
-            $stream = stream_socket_client(
-                // '190.98.170.59:80',
-                '192.168.0.2:80',
-                $errNum,
-                $errStr,
-                10,
-                STREAM_CLIENT_ASYNC_CONNECT | STREAM_CLIENT_CONNECT
-            );
-            if ($stream) {
-                // $logger->debug('Async Stream Opened!');
-                $storage[] = $stream;
-                $job->sendComplete('done');
-            } else {
-                $logger->debug('Failed to open Async Stream!');
-                $job->sendFail();
-            }
-            // $stream = new Async\Stream('190.98.170.59:80');
-            // $stream->setId(1);
-            // if ($stream->isOpen()) {
-            //     $logger->debug('Async Stream Opened!');
-            //     $handler->add($stream);
-            //     $job->sendComplete('done');
-            // } else {
-            //     $logger->debug('Failed to open Async Stream!');
-            //     // send job back to queue!
-            //     $job->sendFail();
-            // }
-            $stats['last'] = microtime(true);
-        });
+        );
 
         $logger->debug('Registering Ping Function');
 
         // Register Thread's Ping Function
-        $gearman->addFunction('ping', function (\GearmanJob $job) use ($logger) {
-            $logger->debug('Ping!');
-            return 'pong';
-        });
+        $gearman->addFunction(
+            'ping',
+            function (\GearmanJob $job) use ($logger) {
+                $logger->debug('Ping!');
+
+                return 'pong';
+            }
+        );
 
         $logger->debug('Entering Gearman Worker Loop');
 
@@ -148,50 +225,51 @@ class ProcessDaemon extends Command {
             $logger->debug(sprintf('Async Streams: %d', count($storage)));
             do {
                 if (count($storage)) {
-                    $read = $storage;
-                    $write = $storage;
+                    $read   = $storage;
+                    $write  = $storage;
                     $except = null;
                     if (stream_select($read, $write, $except, 0) === false) {
                         $logger->debug('Async Wait Failed!');
                     }
 
-                    // $logger->debug(sprintf('Write: %d', count($write)));
+                    $logger->debug(sprintf('Write: %d streams', count($write)));
                     foreach ($write as $stream) {
                         $index = array_search($stream, $storage);
                         if ($index === false) {
-                            // $logger->debug('Stream Not Found!');
+                            $logger->debug('Stream Not Found!');
                         }
 
-                        if (! isset($request[$index])) {
-                            // $logger->debug('Sending Request..');
-                            fwrite($stream, "GET / HTTP/1.0\r\nHost: google.com\r\n\r\n");
-                            $request[$index] = true;
+                        if (isset($request[$index])) {
+                            $logger->debug('Sending Request..');
+                            fwrite($stream, $request[$index]);
+                            $logger->debug(sprintf('Stream Sent %d bytes', strlen($request[$index])));
+                            unset($request[$index]);
                         }
                     }
 
-                    // $logger->debug(sprintf('Read: %d', count($read)));
+                    $logger->debug(sprintf('Read: %d streams', count($read)));
                     foreach ($read as $stream) {
                         $index = array_search($stream, $storage);
                         if ($index === false) {
-                            // $logger->debug('Stream Not Found!');
+                            $logger->debug('Stream Not Found!');
                         }
 
                         $data = fread($stream, 8192);
-                        if (strlen($data) == 0) {
-                            // $logger->debug('Stream EOF, closing..');
+                        echo $data, PHP_EOL;
+                        if (feof($stream)) {
+                            $logger->debug('Stream EOF, closing..');
                             unset($storage[$index]);
-                            unset($request[$index]);
                             fclose($stream);
                             if (count($storage) == 0) {
                                 $stats['last'] = microtime(true);
                             }
                         } else {
-                            // $logger->debug(sprintf('Stream Received %d bytes', strlen($data)));
+                            $logger->debug(sprintf('Stream Received %d bytes', strlen($data)));
                         }
                     }
                 } else {
-                    // $logger->debug(sprintf('Time Spent: %.4f', $stats['last'] - $stats['first']));
-                    // $logger->debug(sprintf('Job Count: %d', $stats['count']));
+                    $logger->debug(sprintf('Time Spent: %.4f', $stats['last'] - $stats['first']));
+                    $logger->debug(sprintf('Job Count: %d', $stats['count']));
                 }
             } while (count($storage) >= self::MAX_STREAMS);
 
