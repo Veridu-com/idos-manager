@@ -34,8 +34,13 @@ class ProcessDaemon extends Command {
             ->setDescription('idOS Manager - Process-based Daemon')
             ->addArgument(
                 'functionName',
-                InputArgument::OPTIONAL,
-                'Gearman Worker Function name (default: idos-delivery)'
+                InputArgument::REQUIRED,
+                'Gearman Worker Function name'
+            )
+            ->addArgument(
+                'serverList',
+                InputArgument::REQUIRED | InputArgument::IS_ARRAY,
+                'Gearman server host list (separate values by space)'
             );
     }
 
@@ -49,31 +54,30 @@ class ProcessDaemon extends Command {
      */
     protected function execute(InputInterface $input, OutputInterface $output) {
         $logger = new ThreadSafe\Logger();
-        $config = [
-            'servers' => [
-                // ['172.17.0.2', 4730]
-                ['localhost', 4730]
-            ]
-        ];
 
         $logger->debug('Initializing idOS Manager Daemon..');
 
         // Gearman Worker function name setup
         $functionName = $input->getArgument('functionName');
         if ((empty($functionName)) || (! preg_match('/^[a-zA-Z0-9\._-]+$/', $functionName))) {
-            $functionName = 'idos-delivery';
+            $functionName = 'idos-manager';
         }
 
         $logger->debug(sprintf('Function Name: %s', $functionName));
 
+        // Server List setup
+        $servers = $input->getArgument('serverList');
+
         $gearman = new \GearmanWorker();
-        foreach ($config['servers'] as $server) {
-            if (is_string($server)) {
-                $logger->debug(sprintf('Adding Gearman server %s', $server));
-                $gearman->addServer($server);
+        foreach ($servers as $server) {
+            if (strpos($server, ':') === false) {
+                $logger->debug(sprintf('Adding Gearman Server: %s', $server));
+                @$gearman->addServer($server);
             } else {
-                $logger->debug(sprintf('Adding Gearman server %s:%d', $server[0], $server[1]));
-                $gearman->addServer($server[0], $server[1]);
+                $server    = explode(':', $server);
+                $server[1] = intval($server[1]);
+                $logger->debug(sprintf('Adding Gearman Server: %s:%d', $server[0], $server[1]));
+                @$gearman->addServer($server[0], $server[1]);
             }
         }
 
@@ -105,8 +109,6 @@ class ProcessDaemon extends Command {
 
                     return;
                 }
-
-                print_r($jobData);
 
                 if ($stats['first'] === null) {
                     $stats['first'] = microtime(true);
@@ -212,7 +214,7 @@ class ProcessDaemon extends Command {
         $logger->debug('Entering Gearman Worker Loop');
 
         // Gearman's Loop
-        while ($gearman->work()
+        while (@$gearman->work()
                 || ($gearman->returnCode() == \GEARMAN_IO_WAIT)
                 || ($gearman->returnCode() == \GEARMAN_NO_JOBS)
                 || ($gearman->returnCode() == \GEARMAN_TIMEOUT)
@@ -238,7 +240,6 @@ class ProcessDaemon extends Command {
                             $logger->debug('Sending Request..');
                             fwrite($stream, $request[$index]);
                             $logger->debug(sprintf('Stream Sent %d bytes', strlen($request[$index])));
-                            echo $request[$index];
                             unset($request[$index]);
                         }
                     }
@@ -251,7 +252,6 @@ class ProcessDaemon extends Command {
                         }
 
                         $data = fread($stream, 8192);
-                        echo $data, PHP_EOL;
                         if (feof($stream)) {
                             $logger->debug('Stream EOF, closing..');
                             unset($storage[$index]);
@@ -317,6 +317,10 @@ class ProcessDaemon extends Command {
                     continue;
                 }
             }
+        }
+
+        if ($gearman->returnCode() != \GEARMAN_SUCCESS) {
+            $logger->error($gearman->error());
         }
 
         $logger->debug('Leaving Gearman Worker Loop');
