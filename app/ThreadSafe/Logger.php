@@ -6,7 +6,7 @@
 
 declare(strict_types = 1);
 
-namespace Cli\Utils;
+namespace App\ThreadSafe;
 
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger as Monolog;

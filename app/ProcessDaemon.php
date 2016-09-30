@@ -120,7 +120,7 @@ class ProcessDaemon extends Command {
 
                 $host = sprintf('ssl://%s:%d', $url['host'], $url['port']);
                 // FIXME
-                $host = '127.0.0.1:8081';
+                $host = sprintf('%s:%d', $url['host'], $url['port']);
 
                 $uri = '/';
                 if (isset($url['path'])) {
@@ -135,12 +135,8 @@ class ProcessDaemon extends Command {
                     $uri = sprintf('%s#%s', $uri, $url['fragment']);
                 }
 
-                $uri = '/index.php/1.0/scrape';
-
-                // FIXME
-                $jobData['user'] = 'ruth';
-                $jobData['pass'] = 'htur';
                 $authorization = base64_encode(sprintf('%s:%s', $jobData['user'], $jobData['pass']));
+
                 $body = json_encode($jobData['handler']);
                 $header = implode(
                     "\r\n",
@@ -152,8 +148,7 @@ class ProcessDaemon extends Command {
                         'Accept: application/json;q=0.9,*/*;q=0.8',
                         'Accept-Encoding: gzip, deflate, sdch, br',
                         sprintf('Authorization: Basic %s', $authorization),
-                        // sprintf('Host: %s', $url['host']),
-                        'Host: localhost',
+                        sprintf('Host: %s', $url['host']),
                         'Connection: close',
                         sprintf('Content-Length: %d', strlen($body)),
                         'Content-Type: application/json; charset=utf-8',
@@ -222,9 +217,9 @@ class ProcessDaemon extends Command {
                 || ($gearman->returnCode() == \GEARMAN_NO_JOBS)
                 || ($gearman->returnCode() == \GEARMAN_TIMEOUT)
         ) {
-            $logger->debug(sprintf('Async Streams: %d', count($storage)));
             do {
                 if (count($storage)) {
+                    $logger->debug(sprintf('Async Streams: %d', count($storage)));
                     $read   = $storage;
                     $write  = $storage;
                     $except = null;
@@ -243,6 +238,7 @@ class ProcessDaemon extends Command {
                             $logger->debug('Sending Request..');
                             fwrite($stream, $request[$index]);
                             $logger->debug(sprintf('Stream Sent %d bytes', strlen($request[$index])));
+                            echo $request[$index];
                             unset($request[$index]);
                         }
                     }
@@ -268,8 +264,8 @@ class ProcessDaemon extends Command {
                         }
                     }
                 } else {
-                    $logger->debug(sprintf('Time Spent: %.4f', $stats['last'] - $stats['first']));
-                    $logger->debug(sprintf('Job Count: %d', $stats['count']));
+                    // $logger->debug(sprintf('Time Spent: %.4f', $stats['last'] - $stats['first']));
+                    // $logger->debug(sprintf('Job Count: %d', $stats['count']));
                 }
             } while (count($storage) >= self::MAX_STREAMS);
 
