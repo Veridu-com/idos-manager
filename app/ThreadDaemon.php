@@ -3,22 +3,22 @@
  * Copyright (c) 2012-2016 Veridu Ltd <https://veridu.com>
  * All rights reserved.
  */
-declare(strict_types=1);
+
+declare(strict_types = 1);
 
 namespace App;
 
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Command definition for Daemon
+ * Command definition for Daemon.
  */
 class ThreadDaemon extends Command {
     /**
-     * Command Configuration.
+     * Command configuration.
      *
      * @return void
      */
@@ -39,9 +39,9 @@ class ThreadDaemon extends Command {
     }
 
     /**
-     * Command Execution
+     * Command execution.
      *
-     * @param Symfony\Component\Console\Input\InputInterface $input
+     * @param Symfony\Component\Console\Input\InputInterface   $input
      * @param Symfony\Component\Console\Output\OutputInterface $outpput
      *
      * @return void
@@ -61,6 +61,7 @@ class ThreadDaemon extends Command {
         if ((empty($poolSize)) || (! is_numeric($poolSize))) {
             $poolSize = 10;
         }
+
         $poolSize = max(1, $poolSize);
         $poolSize = min($poolSize, 100);
 
@@ -94,18 +95,4 @@ class ThreadDaemon extends Command {
 
         $logger->debug('All threads are done, shutting down the pool..');
     }
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

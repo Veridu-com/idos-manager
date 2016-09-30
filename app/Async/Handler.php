@@ -3,26 +3,26 @@
  * Copyright (c) 2012-2016 Veridu Ltd <https://veridu.com>
  * All rights reserved.
  */
-declare(strict_types=1);
+declare(strict_types = 1);
 
 namespace App\Async;
 
 /**
- * Async Stream Handler
+ * Async Stream Handler.
  */
 class Handler implements \Countable {
     private $storage = [];
 
     public function wait(array &$read, array &$write, int $timeout = 0) : bool {
-        $streamList = [];
-        $streamRead = [];
+        $streamList  = [];
+        $streamRead  = [];
         $streamWrite = [];
-        $except = null;
+        $except      = null;
         foreach ($this->storage as $index => $streamObject) {
-            $stream = $streamObject->getStream();
+            $stream             = $streamObject->getStream();
             $streamList[$index] = $stream;
-            $streamRead[] = $stream;
-            $streamWrite[] = $stream;
+            $streamRead[]       = $stream;
+            $streamWrite[]      = $stream;
         }
 
         if (stream_select($streamRead, $streamWrite, $except, $timeout) === false) {
@@ -35,6 +35,7 @@ class Handler implements \Countable {
             if ($index === false) {
                 continue;
             }
+
             $read[] = $this->storage[$index];
         }
 
@@ -44,6 +45,7 @@ class Handler implements \Countable {
             if ($index === false) {
                 continue;
             }
+
             $write[] = $this->storage[$index];
         }
 
@@ -52,6 +54,7 @@ class Handler implements \Countable {
 
     public function add(Stream $stream) : self {
         $this->storage[] = $stream;
+
         return $this;
     }
 
@@ -60,6 +63,7 @@ class Handler implements \Countable {
         if ($index !== false) {
             unset($this->storage[$index]);
         }
+
         return $this;
     }
 

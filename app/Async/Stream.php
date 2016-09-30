@@ -3,25 +3,25 @@
  * Copyright (c) 2012-2016 Veridu Ltd <https://veridu.com>
  * All rights reserved.
  */
-declare(strict_types=1);
+declare(strict_types = 1);
 
 namespace App\Async;
 
 /**
- * Async Socket Stream
+ * Async Socket Stream.
  */
 class Stream {
     private $stream;
     private $errNum;
     private $errStr;
-    private $dataSent = false;
+    private $dataSent     = false;
     private $dataReceived = false;
 
     /**
      * Class constructor.
      *
      * @param string $host
-     * @param int $timeout
+     * @param int    $timeout
      *
      * @return void
      */
@@ -71,6 +71,7 @@ class Stream {
      */
     public function readFromStream(int $numBytes = 8192) : string {
         $this->dataReceived = true;
+
         return fread($this->stream, $numBytes);
     }
 
@@ -83,6 +84,7 @@ class Stream {
      */
     public function writeToStream(string $data) : int {
         $this->dataSent = true;
+
         return fwrite($this->stream, $data);
     }
 

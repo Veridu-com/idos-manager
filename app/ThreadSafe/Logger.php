@@ -3,7 +3,8 @@
  * Copyright (c) 2012-2016 Veridu Ltd <https://veridu.com>
  * All rights reserved.
  */
-declare(strict_types=1);
+
+declare(strict_types = 1);
 
 namespace App\ThreadSafe;
 
@@ -20,12 +21,18 @@ class Logger extends \Threaded {
      * @var \Monolog\Logger
      */
     private $logger;
+    /**
+     * Busy flag for synchornized output.
+     *
+     * @var bool
+     */
+    private $busy = false;
 
     /**
      * Class constructor.
      *
      * @param string $stream
-     * @param int $level
+     * @param int    $level
      *
      * @return void
      */
@@ -35,17 +42,25 @@ class Logger extends \Threaded {
     }
 
     /**
-     * Synchronized function call
+     * Synchronized function call.
      *
      * @param string $name
-     * @param array $arguments
+     * @param array  $arguments
      *
      * @return mixed|null
      */
     public function __call(string $name, array $arguments) {
-        $this->synchronized(function ($thread, $name, $arguments) {
-            // call_user_func_array([$thread->logger, $name], $arguments);
-            echo $arguments[0], PHP_EOL;
-        }, $this, $name, $arguments);
+        $this->synchronized(
+            function () use ($name, $arguments) {
+                while ($this->busy) {
+                    $this->wait();
+                }
+
+                $this->busy = true;
+                call_user_func_array([$this->logger, $name], $arguments);
+                $this->busy = false;
+                $this->notify();
+            }
+        );
     }
 }
