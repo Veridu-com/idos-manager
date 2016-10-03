@@ -1,6 +1,7 @@
 *.log
 *.sublime-*
 .php_cs
+composer.lock
 config/settings.php
 config/testing.php
 environment.php
