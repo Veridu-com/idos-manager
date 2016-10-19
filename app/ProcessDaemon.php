@@ -121,8 +121,6 @@ class ProcessDaemon extends Command {
                 }
 
                 $host = sprintf('ssl://%s:%d', $url['host'], $url['port']);
-                // FIXME
-                $host = sprintf('%s:%d', $url['host'], $url['port']);
 
                 $uri = '/';
                 if (isset($url['path'])) {
