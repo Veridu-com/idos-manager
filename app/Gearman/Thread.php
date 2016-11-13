@@ -25,7 +25,12 @@ class Thread extends \Threaded {
      * @var string
      */
     private $functionName;
-    // private $asyncHandler;
+    /**
+     * Development Mode.
+     *
+     * @var bool
+     */
+    private $devMode;
 
     /**
      * Class constructor.
@@ -34,9 +39,9 @@ class Thread extends \Threaded {
      *
      * @return void
      */
-    public function __construct(string $functionName) {
+    public function __construct(string $functionName, bool $devMode) {
         $this->functionName = $functionName;
-        // $this->asyncHandler = new Async\Handler;
+        $this->devMode      = $devMode;
     }
 
     /**

@@ -11,6 +11,7 @@ namespace App;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -26,6 +27,12 @@ class ThreadDaemon extends Command {
         $this
             ->setName('daemon:thread')
             ->setDescription('idOS Manager - Thread-based Daemon')
+            ->addOption(
+                'devMode',
+                'd',
+                InputOption::VALUE_NONE,
+                'Development mode'
+            )
             ->addArgument(
                 'poolSize',
                 InputArgument::OPTIONAL,
@@ -75,6 +82,12 @@ class ThreadDaemon extends Command {
 
         $logger->debug(sprintf('Function Name: %s', $functionName));
 
+        // Development mode
+        $devMode = ! empty($input->getOption('devMode'));
+        if ($devMode) {
+            $logger->debug('Running in developer mode');
+        }
+
         $threadPool = new \Pool($poolSize, Gearman\Context::class, [$logger, $config]);
 
         $logger->debug('Starting pool..');
@@ -82,7 +95,7 @@ class ThreadDaemon extends Command {
         for ($i = 1; $i <= $poolSize; $i++) {
             $logger->debug(sprintf('Adding thread #%d', $i));
 
-            $threadPool->submit(new Gearman\Thread($functionName));
+            $threadPool->submit(new Gearman\Thread($functionName, $devMode));
         }
 
         $logger->debug('Pool started');

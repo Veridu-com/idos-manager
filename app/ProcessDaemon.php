@@ -11,6 +11,7 @@ namespace App;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -32,6 +33,12 @@ class ProcessDaemon extends Command {
         $this
             ->setName('daemon:process')
             ->setDescription('idOS Manager - Process-based Daemon')
+            ->addOption(
+                'devMode',
+                'd',
+                InputOption::VALUE_NONE,
+                'Development mode'
+            )
             ->addArgument(
                 'functionName',
                 InputArgument::REQUIRED,
@@ -64,6 +71,12 @@ class ProcessDaemon extends Command {
         }
 
         $logger->debug(sprintf('Function Name: %s', $functionName));
+
+        // Development mode
+        $devMode = ! empty($input->getOption('devMode'));
+        if ($devMode) {
+            $logger->debug('Running in developer mode');
+        }
 
         // Server List setup
         $servers = $input->getArgument('serverList');
@@ -100,7 +113,7 @@ class ProcessDaemon extends Command {
         // Register Thread's Worker Function
         $gearman->addFunction(
             $functionName,
-            function (\GearmanJob $job) use ($logger, &$storage, &$request, &$stats) {
+            function (\GearmanJob $job) use ($logger, $devMode, &$storage, &$request, &$stats) {
                 $logger->debug('Got a new job!');
                 $jobData = json_decode($job->workload(), true);
                 if ($jobData === null) {
@@ -156,13 +169,23 @@ class ProcessDaemon extends Command {
                     ]
                 );
 
+                $context = stream_context_create();
+                // development mode: disable ssl check
+                if ($devMode) {
+                    stream_context_set_option($context, 'ssl', 'allow_self_signed', true);
+                    stream_context_set_option($context, 'ssl', 'verify_peer', false);
+                    stream_context_set_option($context, 'ssl', 'verify_peer_name', false);
+                }
+
                 $stats['count']++;
+                // FIXME loop while ($errNum === 115) + timeout control
                 $stream = stream_socket_client(
                     $host,
                     $errNum,
                     $errStr,
                     10,
-                    STREAM_CLIENT_ASYNC_CONNECT | STREAM_CLIENT_CONNECT
+                    STREAM_CLIENT_ASYNC_CONNECT | STREAM_CLIENT_CONNECT,
+                    $context
                 );
                 if ($stream) {
                     $logger->debug('Async Stream Opened!');
