@@ -13,6 +13,6 @@ mb_http_output('UTF-8');
 mb_internal_encoding('UTF-8');
 
 $application = new Symfony\Component\Console\Application();
-$application->add(new App\ThreadDaemon());
 $application->add(new App\ProcessDaemon());
+$application->add(new App\ThreadDaemon());
 $application->run();
