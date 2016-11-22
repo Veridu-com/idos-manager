@@ -8,12 +8,13 @@ declare(strict_types = 1);
 
 namespace App;
 
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger as Monolog;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-
 /**
  * Command definition for Process-based Daemon.
  */
@@ -39,6 +40,12 @@ class ProcessDaemon extends Command {
                 InputOption::VALUE_NONE,
                 'Development mode'
             )
+            ->addOption(
+                'logFile',
+                'l',
+                InputOption::VALUE_REQUIRED,
+                'Path to log file'
+            )
             ->addArgument(
                 'functionName',
                 InputArgument::REQUIRED,
@@ -60,9 +67,20 @@ class ProcessDaemon extends Command {
      * @return void
      */
     protected function execute(InputInterface $input, OutputInterface $output) {
-        $logger = new ThreadSafe\Logger();
+        $logFile = $input->getOption('logFile') ?? 'php://stdout';
+        $monolog = new Monolog('Manager');
+        $monolog->pushHandler(new StreamHandler($logFile, Monolog::DEBUG));
+        $logger  = new ThreadSafe\Logger($monolog);
 
         $logger->debug('Initializing idOS Manager Daemon..');
+
+        // Development mode
+        $devMode = ! empty($input->getOption('devMode'));
+        if ($devMode) {
+            $logger->debug('Running in developer mode');
+            ini_set('display_errors', 'On');
+            error_reporting(-1);
+        }
 
         // Gearman Worker function name setup
         $functionName = $input->getArgument('functionName');
@@ -71,12 +89,6 @@ class ProcessDaemon extends Command {
         }
 
         $logger->debug(sprintf('Function Name: %s', $functionName));
-
-        // Development mode
-        $devMode = ! empty($input->getOption('devMode'));
-        if ($devMode) {
-            $logger->debug('Running in developer mode');
-        }
 
         // Server List setup
         $servers = $input->getArgument('serverList');
@@ -205,17 +217,6 @@ class ProcessDaemon extends Command {
                     $job->sendFail();
                 }
 
-                // $stream = new Async\Stream('190.98.170.59:80');
-                // $stream->setId(1);
-                // if ($stream->isOpen()) {
-                //     $logger->debug('Async Stream Opened!');
-                //     $handler->add($stream);
-                //     $job->sendComplete('done');
-                // } else {
-                //     $logger->debug('Failed to open Async Stream!');
-                //     // send job back to queue!
-                //     $job->sendFail();
-                // }
                 $stats['last'] = microtime(true);
             }
         );
@@ -284,41 +285,8 @@ class ProcessDaemon extends Command {
                             $logger->debug(sprintf('Stream Received %d bytes', strlen($data)));
                         }
                     }
-                } else {
-                    // $logger->debug(sprintf('Time Spent: %.4f', $stats['last'] - $stats['first']));
-                    // $logger->debug(sprintf('Job Count: %d', $stats['count']));
                 }
             } while (count($storage) >= self::MAX_STREAMS);
-
-            // if (count($handler)) {
-            //     $read = [];
-            //     $write = [];
-            //     if (!$handler->check($read, $write)) {
-            //         $logger->debug('Async Wait Failed!');
-            //         // What should be done at this point..?!
-            //     }
-
-            //     foreach ($write as &$stream) {
-            //         if ($stream->dataSent()) {
-            //             continue;
-            //         }
-
-            //         $logger->debug('Sending Request..');
-            //         $stream->writeToStream("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n");
-            //     }
-
-            //     foreach ($read as &$stream) {
-            //         $data = $stream->readFromStream();
-            //         if (strlen($data) == 0) {
-            //             // Stream's EOF
-            //             $logger->debug('Stream EOF, closing..');
-            //             $handler->del($stream);
-            //             unset($stream);
-            //         } else {
-            //             $logger->debug('Stream Received %d bytes', strlen($data));
-            //         }
-            //     }
-            // }
 
             if ($gearman->returnCode() == \GEARMAN_SUCCESS) {
                 continue;

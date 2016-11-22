@@ -26,7 +26,7 @@ class ThreadDaemon extends Command {
     protected function configure() {
         $this
             ->setName('daemon:thread')
-            ->setDescription('idOS Manager - Thread-based Daemon')
+            ->setDescription('idOS Manager - Thread-based Daemon [outdated!]')
             ->addOption(
                 'devMode',
                 'd',
@@ -54,8 +54,9 @@ class ThreadDaemon extends Command {
      * @return void
      */
     protected function execute(InputInterface $input, OutputInterface $output) {
-        $logger = new ThreadSafe\Logger();
-        $config = [
+        $logFile = $input->getOption('logFile') ?? 'php://stdout';
+        $logger  = new ThreadSafe\Logger($logFile);
+        $config  = [
             'servers' => [
                 ['172.17.0.2', 4730]
             ]
