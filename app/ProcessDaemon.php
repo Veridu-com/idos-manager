@@ -15,6 +15,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+
 /**
  * Command definition for Process-based Daemon.
  */
@@ -70,7 +71,7 @@ class ProcessDaemon extends Command {
         $logFile = $input->getOption('logFile') ?? 'php://stdout';
         $monolog = new Monolog('Manager');
         $monolog->pushHandler(new StreamHandler($logFile, Monolog::DEBUG));
-        $logger  = new ThreadSafe\Logger($monolog);
+        $logger = new ThreadSafe\Logger($monolog);
 
         $logger->debug('Initializing idOS Manager Daemon..');
 
@@ -112,7 +113,7 @@ class ProcessDaemon extends Command {
         // 5 second I/O Timeout
         $gearman->setTimeout(1000);
 
-        $logger->debug('Registering Worker Function');
+        $logger->debug('Registering Worker Function', ['function' => $functionName]);
 
         $storage = [];
         $request = [];
@@ -159,6 +160,9 @@ class ProcessDaemon extends Command {
                 if (isset($url['fragment'])) {
                     $uri = sprintf('%s#%s', $uri, $url['fragment']);
                 }
+
+                $logger->info(sprintf('Host: %s', $host));
+                $logger->info(sprintf('Path: %s', $uri));
 
                 $authorization = base64_encode(sprintf('%s:%s', $jobData['user'], $jobData['pass']));
 
@@ -221,18 +225,6 @@ class ProcessDaemon extends Command {
             }
         );
 
-        $logger->debug('Registering Ping Function');
-
-        // Register Thread's Ping Function
-        $gearman->addFunction(
-            'ping',
-            function (\GearmanJob $job) use ($logger) {
-                $logger->debug('Ping!');
-
-                return 'pong';
-            }
-        );
-
         $logger->debug('Entering Gearman Worker Loop');
 
         // Gearman's Loop
@@ -270,7 +262,7 @@ class ProcessDaemon extends Command {
                     foreach ($read as $stream) {
                         $index = array_search($stream, $storage);
                         if ($index === false) {
-                            $logger->debug('Stream Not Found!');
+                            $logger->error('Stream Not Found!');
                         }
 
                         $data = fread($stream, 8192);
