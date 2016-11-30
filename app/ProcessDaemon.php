@@ -26,6 +26,7 @@ class ProcessDaemon extends Command {
      * @const MAX_STREAMS
      */
     const MAX_STREAMS = 500;
+
     /**
      * Command Configuration.
      *
@@ -295,6 +296,11 @@ class ProcessDaemon extends Command {
                 if ($gearman->returnCode() == \GEARMAN_TIMEOUT) {
                     // Job wait timeout, sleep before retry
                     sleep(1);
+                    if (! @$gearman->echo('ping')) {
+                        $logger->debug('Invalid server state, restart');
+                        exit;
+                    }
+
                     continue;
                 }
             }
