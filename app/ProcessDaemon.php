@@ -26,6 +26,83 @@ class ProcessDaemon extends Command {
      * @const MAX_STREAMS
      */
     const MAX_STREAMS = 500;
+    const ELB_A = 'awseb-e-w-AWSEBLoa-R75ZCTPG8FIZ';
+    const ELB_B = 'awseb-e-6-AWSEBLoa-1KBAQ3S7MG7L5';
+    const ELB_DESCRIBE = 'aws elb describe-load-balancers --load-balancer-name %s --output text --region us-east-1 | grep \'amazonaws.com\' | awk \'{print $4}\'';
+    const ELB_ENVIRONMENT = 'aws elb describe-tags --load-balancer-name %s --output text | grep ENVIRONMENT_EB | awk \'{print $3}\'';
+
+    /**
+     * AWS Health Check
+     *
+     * Performs Health Checks related to AWS Infrastructure and stops the daemon in case of:
+     * 1. Daemon is connected to an invalid Load Balancer (Prod to Stage; vice-versa)
+     * 2. Daemon is connected to an stalled/unavailable Gearman Server
+     * 3. More/new Gearman Servers are available
+     *
+     * @param \Monolog\Logger $logger
+     * @param array           $servers
+     *
+     * @return void
+     */
+    private function awsHealthCheck(Monolog $logger, array $servers) {
+        static $elbOne = null;
+        static $elbTwo = null;
+
+        $logger->debug('Checking AWS Health');
+
+        $currentEnv = getenv('ENVIRONMENT_EB');
+        if (empty($currentEnv)) {
+            $logger->notice('ENVIRONMENT_EB not set');
+            return;
+        }
+
+        $hostName = gethostbyaddr($servers[0]);
+        $logger->info('Checking Connected Host', ['hostname' => $hostName]);
+        if ($elbOne === null) {
+            $logger->debug('Checking ELB A');
+            $describe = exec(sprintf(self::ELB_DESCRIBE, self::ELB_A));
+            if (! empty($describe)) {
+                $elbOne = $describe;
+            }
+        }
+
+        $logger->info('ELB A', ['hostname' => $elbOne]);
+
+        if ($elbTwo === null) {
+            $logger->debug('Checking ELB B');
+            $describe = exec(sprintf(self::ELB_DESCRIBE, self::ELB_B));
+            if (! empty($describe)) {
+                $elbTwo = $describe;
+            }
+        }
+
+        $logger->info('ELB B', ['hostname' => $elbTwo]);
+
+        if ($hostName === $elbOne) {
+            $logger->info('Connected to ELB A');
+            $envOne = exec(sprintf(self::ELB_ENVIRONMENT, self::ELB_A));
+            if ($currentEnv !== $envOne) {
+                $logger->warning('Environments do not match, restarting', ['curr' => $currentEnv, 'elba' => $envOne]);
+                exit;
+            }
+
+            return;
+        }
+
+        if ($hostName === $elbTwo) {
+            $logger->info('Connected to ELB B');
+            $envTwo = exec(sprintf(self::ELB_ENVIRONMENT, self::ELB_B));
+            if ($currentEnv !== $envTwo) {
+                $logger->warning('Environments do not match, restarting', ['curr' => $currentEnv, 'elbb' => $envTwo]);
+                exit;
+            }
+
+            return;
+        }
+
+        $logger->alert('Could not match ELB hosts, restarting');
+        exit;
+    }
 
     /**
      * Command Configuration.
@@ -36,6 +113,12 @@ class ProcessDaemon extends Command {
         $this
             ->setName('daemon:process')
             ->setDescription('idOS Manager - Process-based Daemon')
+            ->addOption(
+                'awsHealthCheck',
+                'c',
+                InputOption::VALUE_NONE,
+                'Run AWS Health Checks'
+            )
             ->addOption(
                 'devMode',
                 'd',
@@ -70,11 +153,13 @@ class ProcessDaemon extends Command {
      */
     protected function execute(InputInterface $input, OutputInterface $output) {
         $logFile = $input->getOption('logFile') ?? 'php://stdout';
-        $monolog = new Monolog('Manager');
-        $monolog->pushHandler(new StreamHandler($logFile, Monolog::DEBUG));
-        $logger = new ThreadSafe\Logger($monolog);
+        $logger = new Monolog('Manager');
+        $logger->pushHandler(new StreamHandler($logFile, Monolog::DEBUG));
 
         $logger->debug('Initializing idOS Manager Daemon..');
+
+        // AWS Health Check
+        $awsHealthCheck = ! empty($input->getOption('awsHealthCheck'));
 
         // Development mode
         $devMode = ! empty($input->getOption('devMode'));
@@ -299,6 +384,10 @@ class ProcessDaemon extends Command {
                     if (! @$gearman->echo('ping')) {
                         $logger->debug('Invalid server state, restart');
                         exit;
+                    }
+
+                    if ($awsHealthCheck) {
+                        $this->awsHealthCheck($logger, $servers);
                     }
 
                     continue;
