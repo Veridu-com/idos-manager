@@ -46,7 +46,9 @@ class ProcessDaemon extends Command {
      */
     private function awsHealthCheck(Monolog $logger, array $servers) {
         static $elbOne = null;
+        static $ipAddrOne = null;
         static $elbTwo = null;
+        static $ipAddrTwo = null;
 
         $logger->debug('Checking AWS Health');
 
@@ -56,8 +58,23 @@ class ProcessDaemon extends Command {
             return;
         }
 
-        $hostName = gethostbyaddr($servers[0]);
-        $logger->info('Checking Connected Host', ['hostname' => $hostName]);
+        $ipAddr = [];
+        foreach ($servers as $server) {
+            if (filter_var($server, \FILTER_VALIDATE_IP) === false) {
+                $ipList = gethostbynamel($server);
+                foreach ($ipList as $ipItem) {
+                    $ipAddr[] = $ipItem;
+                }
+
+                continue;
+            }
+
+            $ipAddr[] = $server;
+        }
+
+        $logger->info('Checking Connected Host', ['server' => $servers[0], 'ipaddr' => $ipAddr]);
+
+        // ELB A
         if ($elbOne === null) {
             $logger->debug('Checking ELB A');
             $describe = exec(sprintf(self::ELB_DESCRIBE, self::ELB_A));
@@ -66,8 +83,13 @@ class ProcessDaemon extends Command {
             }
         }
 
-        $logger->info('ELB A', ['hostname' => $elbOne]);
+        if (($ipAddrOne === null) && (! empty($elbOne))) {
+            $ipAddrOne = gethostbynamel($elbOne);
+        }
 
+        $logger->info('ELB A', ['hostname' => $elbOne, 'ipaddr' => $ipAddrOne]);
+
+        // ELB B
         if ($elbTwo === null) {
             $logger->debug('Checking ELB B');
             $describe = exec(sprintf(self::ELB_DESCRIBE, self::ELB_B));
@@ -76,9 +98,13 @@ class ProcessDaemon extends Command {
             }
         }
 
-        $logger->info('ELB B', ['hostname' => $elbTwo]);
+        if (($ipAddrTwo === null) && (! empty($elbTwo))) {
+            $ipAddrTwo = gethostbynamel($elbTwo);
+        }
 
-        if ($hostName === $elbOne) {
+        $logger->info('ELB B', ['hostname' => $elbTwo, 'ipaddr' => $ipAddrTwo]);
+
+        if ((! empty($ipAddrOne)) && (! empty(array_intersect($ipAddr, $ipAddrOne)))) {
             $logger->info('Connected to ELB A');
             $envOne = exec(sprintf(self::ELB_ENVIRONMENT, self::ELB_A));
             if ($currentEnv !== $envOne) {
@@ -89,7 +115,7 @@ class ProcessDaemon extends Command {
             return;
         }
 
-        if ($hostName === $elbTwo) {
+        if ((! empty($ipAddrTwo)) && (! empty(array_intersect($ipAddr, $ipAddrTwo)))) {
             $logger->info('Connected to ELB B');
             $envTwo = exec(sprintf(self::ELB_ENVIRONMENT, self::ELB_B));
             if ($currentEnv !== $envTwo) {
