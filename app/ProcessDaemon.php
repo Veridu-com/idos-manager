@@ -41,14 +41,22 @@ class ProcessDaemon extends Command {
      *
      * @param \Monolog\Logger $logger
      * @param array           $servers
+     * @param bool            $force
      *
      * @return void
      */
-    private function awsHealthCheck(Monolog $logger, array $servers) {
+    private function awsHealthCheck(Monolog $logger, array $servers, bool $force = false) {
         static $elbOne = null;
         static $ipAddrOne = null;
         static $elbTwo = null;
         static $ipAddrTwo = null;
+        static $checkCount = 0;
+
+        // avoid checking too often
+        if ((! $force) || (++$checkCount == 5)) {
+            $checkCount = 0;
+            return;
+        }
 
         $logger->debug('Checking AWS Health');
 
@@ -107,6 +115,11 @@ class ProcessDaemon extends Command {
         if ((! empty($ipAddrOne)) && (! empty(array_intersect($ipAddr, $ipAddrOne)))) {
             $logger->info('Connected to ELB A');
             $envOne = exec(sprintf(self::ELB_ENVIRONMENT, self::ELB_A));
+            if (empty($envOne)) {
+                $logger->error('Could not retrieve ELB A environment');
+                return;
+            }
+
             if ($currentEnv !== $envOne) {
                 $logger->warning('Environments do not match, restarting', ['curr' => $currentEnv, 'elba' => $envOne]);
                 exit;
@@ -118,6 +131,11 @@ class ProcessDaemon extends Command {
         if ((! empty($ipAddrTwo)) && (! empty(array_intersect($ipAddr, $ipAddrTwo)))) {
             $logger->info('Connected to ELB B');
             $envTwo = exec(sprintf(self::ELB_ENVIRONMENT, self::ELB_B));
+            if (empty($envTwo)) {
+                $logger->error('Could not retrieve ELB B environment');
+                return;
+            }
+
             if ($currentEnv !== $envTwo) {
                 $logger->warning('Environments do not match, restarting', ['curr' => $currentEnv, 'elbb' => $envTwo]);
                 exit;
