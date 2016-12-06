@@ -27,127 +27,6 @@ class ProcessDaemon extends Command {
      * @const MAX_STREAMS
      */
     const MAX_STREAMS = 500;
-    const ELB_A = 'awseb-e-w-AWSEBLoa-R75ZCTPG8FIZ';
-    const ELB_B = 'awseb-e-6-AWSEBLoa-1KBAQ3S7MG7L5';
-    const ELB_DESCRIBE = 'aws elb describe-load-balancers --load-balancer-name %s --output text --region us-east-1 | grep \'amazonaws.com\' | awk \'{print $4}\'';
-    const ELB_ENVIRONMENT = 'aws elb describe-tags --load-balancer-name %s --output text | grep ENVIRONMENT_EB | awk \'{print $3}\'';
-
-    /**
-     * AWS Health Check
-     *
-     * Performs Health Checks related to AWS Infrastructure and stops the daemon in case of:
-     * 1. Daemon is connected to an invalid Load Balancer (Prod to Stage; vice-versa)
-     * 2. Daemon is connected to an stalled/unavailable Gearman Server
-     * 3. More/new Gearman Servers are available
-     *
-     * @param \Monolog\Logger $logger
-     * @param array           $servers
-     * @param bool            $force
-     *
-     * @return void
-     */
-    private function awsHealthCheck(Monolog $logger, array $servers, bool $force = false) {
-        static $elbOne = null;
-        static $ipAddrOne = null;
-        static $elbTwo = null;
-        static $ipAddrTwo = null;
-        static $checkCount = 0;
-
-        // avoid checking too often
-        if ((! $force) && (++$checkCount < 5)) {
-            return;
-        }
-
-        $checkCount = 0;
-        $logger->debug('Checking AWS Health');
-
-        $currentEnv = getenv('ENVIRONMENT_EB');
-        if (empty($currentEnv)) {
-            $logger->notice('ENVIRONMENT_EB not set');
-            return;
-        }
-
-        $ipAddr = [];
-        foreach ($servers as $server) {
-            if (filter_var($server, \FILTER_VALIDATE_IP) === false) {
-                $ipList = gethostbynamel($server);
-                foreach ($ipList as $ipItem) {
-                    $ipAddr[] = $ipItem;
-                }
-
-                continue;
-            }
-
-            $ipAddr[] = $server;
-        }
-
-        $logger->info('Checking Connected Host', ['server' => $servers[0], 'ipaddr' => $ipAddr]);
-
-        // ELB A
-        if ($elbOne === null) {
-            $logger->debug('Checking ELB A');
-            $describe = exec(sprintf(self::ELB_DESCRIBE, self::ELB_A));
-            if (! empty($describe)) {
-                $elbOne = $describe;
-            }
-        }
-
-        if (($ipAddrOne === null) && (! empty($elbOne))) {
-            $ipAddrOne = gethostbynamel($elbOne);
-        }
-
-        $logger->info('ELB A', ['hostname' => $elbOne, 'ipaddr' => $ipAddrOne]);
-
-        // ELB B
-        if ($elbTwo === null) {
-            $logger->debug('Checking ELB B');
-            $describe = exec(sprintf(self::ELB_DESCRIBE, self::ELB_B));
-            if (! empty($describe)) {
-                $elbTwo = $describe;
-            }
-        }
-
-        if (($ipAddrTwo === null) && (! empty($elbTwo))) {
-            $ipAddrTwo = gethostbynamel($elbTwo);
-        }
-
-        $logger->info('ELB B', ['hostname' => $elbTwo, 'ipaddr' => $ipAddrTwo]);
-
-        if ((! empty($ipAddrOne)) && (! empty(array_intersect($ipAddr, $ipAddrOne)))) {
-            $logger->info('Connected to ELB A');
-            $envOne = exec(sprintf(self::ELB_ENVIRONMENT, self::ELB_A));
-            if (empty($envOne)) {
-                $logger->error('Could not retrieve ELB A environment');
-                return;
-            }
-
-            if ($currentEnv !== $envOne) {
-                $logger->warning('Environments do not match, restarting', ['curr' => $currentEnv, 'elba' => $envOne]);
-                exit;
-            }
-
-            return;
-        }
-
-        if ((! empty($ipAddrTwo)) && (! empty(array_intersect($ipAddr, $ipAddrTwo)))) {
-            $logger->info('Connected to ELB B');
-            $envTwo = exec(sprintf(self::ELB_ENVIRONMENT, self::ELB_B));
-            if (empty($envTwo)) {
-                $logger->error('Could not retrieve ELB B environment');
-                return;
-            }
-
-            if ($currentEnv !== $envTwo) {
-                $logger->warning('Environments do not match, restarting', ['curr' => $currentEnv, 'elbb' => $envTwo]);
-                exit;
-            }
-
-            return;
-        }
-
-        $logger->alert('Could not match ELB hosts, restarting');
-        exit;
-    }
 
     /**
      * Command Configuration.
@@ -158,12 +37,6 @@ class ProcessDaemon extends Command {
         $this
             ->setName('daemon:process')
             ->setDescription('idOS Manager - Process-based Daemon')
-            ->addOption(
-                'awsHealthCheck',
-                'c',
-                InputOption::VALUE_NONE,
-                'Run AWS Health Checks'
-            )
             ->addOption(
                 'devMode',
                 'd',
@@ -204,9 +77,6 @@ class ProcessDaemon extends Command {
             ->pushHandler(new StreamHandler($logFile, Monolog::DEBUG));
 
         $logger->debug('Initializing idOS Manager Daemon..');
-
-        // AWS Health Check
-        $awsHealthCheck = ! empty($input->getOption('awsHealthCheck'));
 
         // Development mode
         $devMode = ! empty($input->getOption('devMode'));
@@ -431,10 +301,6 @@ class ProcessDaemon extends Command {
                     if (! @$gearman->echo('ping')) {
                         $logger->debug('Invalid server state, restart');
                         exit;
-                    }
-
-                    if ($awsHealthCheck) {
-                        $this->awsHealthCheck($logger, $servers);
                     }
 
                     continue;
