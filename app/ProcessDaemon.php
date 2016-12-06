@@ -10,6 +10,7 @@ namespace App;
 
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger as Monolog;
+use Monolog\Processor\UidProcessor;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -53,11 +54,11 @@ class ProcessDaemon extends Command {
         static $checkCount = 0;
 
         // avoid checking too often
-        if ((! $force) || (++$checkCount == 5)) {
-            $checkCount = 0;
+        if ((! $force) && (++$checkCount < 5)) {
             return;
         }
 
+        $checkCount = 0;
         $logger->debug('Checking AWS Health');
 
         $currentEnv = getenv('ENVIRONMENT_EB');
@@ -198,7 +199,9 @@ class ProcessDaemon extends Command {
     protected function execute(InputInterface $input, OutputInterface $output) {
         $logFile = $input->getOption('logFile') ?? 'php://stdout';
         $logger = new Monolog('Manager');
-        $logger->pushHandler(new StreamHandler($logFile, Monolog::DEBUG));
+        $logger
+            ->pushProcessor(new UidProcessor())
+            ->pushHandler(new StreamHandler($logFile, Monolog::DEBUG));
 
         $logger->debug('Initializing idOS Manager Daemon..');
 
