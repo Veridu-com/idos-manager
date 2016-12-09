@@ -10,6 +10,7 @@ namespace App;
 
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger as Monolog;
+use Monolog\Processor\ProcessIdProcessor;
 use Monolog\Processor\UidProcessor;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -73,6 +74,7 @@ class ProcessDaemon extends Command {
         $logFile = $input->getOption('logFile') ?? 'php://stdout';
         $logger = new Monolog('Manager');
         $logger
+            ->pushProcessor(new ProcessIdProcessor())
             ->pushProcessor(new UidProcessor())
             ->pushHandler(new StreamHandler($logFile, Monolog::DEBUG));
 
