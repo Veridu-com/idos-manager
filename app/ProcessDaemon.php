@@ -142,7 +142,6 @@ class ProcessDaemon extends Command {
                 }
 
                 $jobCount++;
-                $lastJob = time();
 
                 $url = parse_url($jobData['url']);
 
@@ -223,6 +222,8 @@ class ProcessDaemon extends Command {
                     $logger->error($errStr);
                     $job->sendFail();
                 }
+
+                $lastJob = time();
             }
         );
 
