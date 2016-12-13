@@ -80,6 +80,8 @@ class ProcessDaemon extends Command {
 
         $logger->debug('Initializing idOS Manager Daemon..');
 
+        $bootTime = time();
+
         // Development mode
         $devMode = ! empty($input->getOption('devMode'));
         if ($devMode) {
@@ -122,16 +124,14 @@ class ProcessDaemon extends Command {
 
         $storage = [];
         $request = [];
-        $stats   = [
-            'first' => null,
-            'last'  => null,
-            'count' => 0
-        ];
+
+        $jobCount = 0;
+        $lastJob  = 0;
 
         // Register Thread's Worker Function
         $gearman->addFunction(
             $functionName,
-            function (\GearmanJob $job) use ($logger, $devMode, &$storage, &$request, &$stats) {
+            function (\GearmanJob $job) use ($logger, $devMode, &$storage, &$request, &$jobCount, &$lastJob) {
                 $logger->debug('Got a new job!');
                 $jobData = json_decode($job->workload(), true);
                 if ($jobData === null) {
@@ -141,9 +141,8 @@ class ProcessDaemon extends Command {
                     return;
                 }
 
-                if ($stats['first'] === null) {
-                    $stats['first'] = microtime(true);
-                }
+                $jobCount++;
+                $lastJob = time();
 
                 $url = parse_url($jobData['url']);
 
@@ -198,7 +197,6 @@ class ProcessDaemon extends Command {
                     stream_context_set_option($context, 'ssl', 'verify_peer_name', false);
                 }
 
-                $stats['count']++;
                 // FIXME loop while ($errNum === 115) + timeout control
                 $stream = stream_socket_client(
                     $host,
@@ -225,8 +223,6 @@ class ProcessDaemon extends Command {
                     $logger->error($errStr);
                     $job->sendFail();
                 }
-
-                $stats['last'] = microtime(true);
             }
         );
 
@@ -275,9 +271,6 @@ class ProcessDaemon extends Command {
                             $logger->debug('Stream EOF, closing..');
                             unset($storage[$index]);
                             fclose($stream);
-                            if (count($storage) == 0) {
-                                $stats['last'] = microtime(true);
-                            }
                         } else {
                             $logger->debug(sprintf('Stream Received %d bytes', strlen($data)));
                         }
@@ -301,7 +294,18 @@ class ProcessDaemon extends Command {
                     // Job wait timeout, sleep before retry
                     sleep(1);
                     if (! @$gearman->echo('ping')) {
-                        $logger->debug('Invalid server state, restart');
+                        $logger->debug('Invalid server state, restarting');
+                        exit;
+                    }
+
+                    if (((time() - $bootTime) > 10) && ((time() - $lastJob) > 10)) {
+                        $logger->info(
+                            'Inactivity detected, restarting',
+                            [
+                                'runtime' => time() - $bootTime,
+                                'jobs' => $jobCount
+                            ]
+                        );
                         exit;
                     }
 
@@ -314,6 +318,6 @@ class ProcessDaemon extends Command {
             $logger->error($gearman->error());
         }
 
-        $logger->debug('Leaving Gearman Worker Loop');
+        $logger->debug('Leaving Gearman Worker Loop', ['runtime' => time() - $bootTime, 'jobs' => $jobCount]);
     }
 }
