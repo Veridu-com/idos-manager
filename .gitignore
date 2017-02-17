@@ -1,6 +1,9 @@
 *.log
 *.sublime-*
 .php_cs
+.vscode
+build/
+docs/
 composer.lock
 config/settings.php
 config/testing.php
