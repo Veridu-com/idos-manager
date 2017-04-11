@@ -9,7 +9,7 @@ declare(strict_types = 1);
 namespace App;
 
 use Monolog\Handler\StreamHandler;
-use Monolog\Logger as Monolog;
+use Monolog\Logger;
 use Monolog\Processor\ProcessIdProcessor;
 use Monolog\Processor\UidProcessor;
 use Symfony\Component\Console\Command\Command;
@@ -78,11 +78,11 @@ class ProcessDaemon extends Command {
      */
     protected function execute(InputInterface $input, OutputInterface $output) {
         $logFile = $input->getOption('logFile') ?? 'php://stdout';
-        $logger  = new Monolog('Manager');
+        $logger  = new Logger('Manager');
         $logger
             ->pushProcessor(new ProcessIdProcessor())
             ->pushProcessor(new UidProcessor())
-            ->pushHandler(new StreamHandler($logFile, Monolog::DEBUG));
+            ->pushHandler(new StreamHandler($logFile, Logger::DEBUG));
 
         $logger->debug('Initializing idOS Manager Daemon..');
 
