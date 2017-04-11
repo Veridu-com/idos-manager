@@ -9,7 +9,7 @@ declare(strict_types = 1);
 namespace App;
 
 use Monolog\Handler\StreamHandler;
-use Monolog\Logger as Monolog;
+use Monolog\Logger;
 use Monolog\Processor\ProcessIdProcessor;
 use Monolog\Processor\UidProcessor;
 use Symfony\Component\Console\Command\Command;
@@ -45,6 +45,12 @@ class ProcessDaemon extends Command {
                 'Development mode'
             )
             ->addOption(
+                'healthCheck',
+                'h',
+                InputOption::VALUE_NONE,
+                'Enable queue health check'
+            )
+            ->addOption(
                 'logFile',
                 'l',
                 InputOption::VALUE_REQUIRED,
@@ -63,20 +69,20 @@ class ProcessDaemon extends Command {
     }
 
     /**
-     * Command Execution.
+     * Command execution.
      *
-     * @param Symfony\Component\Console\Input\InputInterface   $input
-     * @param Symfony\Component\Console\Output\OutputInterface $outpput
+     * @param \Symfony\Component\Console\Input\InputInterface   $input
+     * @param \Symfony\Component\Console\Output\OutputInterface $outpput
      *
      * @return void
      */
     protected function execute(InputInterface $input, OutputInterface $output) {
         $logFile = $input->getOption('logFile') ?? 'php://stdout';
-        $logger = new Monolog('Manager');
+        $logger  = new Logger('Manager');
         $logger
             ->pushProcessor(new ProcessIdProcessor())
             ->pushProcessor(new UidProcessor())
-            ->pushHandler(new StreamHandler($logFile, Monolog::DEBUG));
+            ->pushHandler(new StreamHandler($logFile, Logger::DEBUG));
 
         $logger->debug('Initializing idOS Manager Daemon..');
 
@@ -90,10 +96,16 @@ class ProcessDaemon extends Command {
             error_reporting(-1);
         }
 
+        // Health check
+        $healthCheck = ! empty($input->getOption('healthCheck'));
+        if ($healthCheck) {
+            $logger->debug('Enabling health check');
+        }
+
         // Gearman Worker function name setup
         $functionName = $input->getArgument('functionName');
         if ((empty($functionName)) || (! preg_match('/^[a-zA-Z0-9\._-]+$/', $functionName))) {
-            $functionName = 'idos-manager';
+            $functionName = 'manager';
         }
 
         $logger->debug(sprintf('Function Name: %s', $functionName));
@@ -106,18 +118,19 @@ class ProcessDaemon extends Command {
             if (strpos($server, ':') === false) {
                 $logger->debug(sprintf('Adding Gearman Server: %s', $server));
                 @$gearman->addServer($server);
-            } else {
-                $server    = explode(':', $server);
-                $server[1] = intval($server[1]);
-                $logger->debug(sprintf('Adding Gearman Server: %s:%d', $server[0], $server[1]));
-                @$gearman->addServer($server[0], $server[1]);
+                continue;
             }
+
+            $server    = explode(':', $server);
+            $server[1] = intval($server[1]);
+            $logger->debug(sprintf('Adding Gearman Server: %s:%d', $server[0], $server[1]));
+            @$gearman->addServer($server[0], $server[1]);
         }
 
         // Run the worker in non-blocking mode
         $gearman->addOptions(\GEARMAN_WORKER_NON_BLOCKING);
 
-        // 5 second I/O Timeout
+        // 1 second I/O timeout
         $gearman->setTimeout(1000);
 
         $logger->debug('Registering Worker Function', ['function' => $functionName]);
@@ -299,12 +312,12 @@ class ProcessDaemon extends Command {
                         exit;
                     }
 
-                    if (((time() - $bootTime) > 10) && ((time() - $lastJob) > 10)) {
+                    if (($healthCheck) && ((time() - $bootTime) > 10) && ((time() - $lastJob) > 10)) {
                         $logger->info(
                             'Inactivity detected, restarting',
                             [
                                 'runtime' => time() - $bootTime,
-                                'jobs' => $jobCount
+                                'jobs'    => $jobCount
                             ]
                         );
                         exit;
