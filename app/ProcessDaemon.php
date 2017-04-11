@@ -46,7 +46,7 @@ class ProcessDaemon extends Command {
             )
             ->addOption(
                 'healthCheck',
-                'h',
+                'c',
                 InputOption::VALUE_NONE,
                 'Enable queue health check'
             )
