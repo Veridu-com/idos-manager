@@ -163,6 +163,15 @@ class ProcessDaemon extends Command {
                 }
 
                 $host = sprintf('ssl://%s:%d', $url['host'], $url['port']);
+                if ($devMode) {
+                    if ($url['scheme'] === 'http') {
+                        if ($url['port'] == 443) {
+                            $url['port'] = 80;
+                        }
+
+                        $host = sprintf('tcp://%s:%d', $url['host'], $url['port']);
+                    }
+                }
 
                 $uri = '/';
                 if (isset($url['path'])) {
