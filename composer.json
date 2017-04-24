@@ -23,7 +23,7 @@
     },
     "require-dev": {
         "ext-xsl": "*",
-        "friendsofphp/php-cs-fixer": "@stable",
+        "friendsofphp/php-cs-fixer": "^1.13",
         "pdepend/pdepend": "@stable",
         "phploc/phploc": "@stable",
         "phpmd/phpmd" : "@stable",
