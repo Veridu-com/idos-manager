@@ -251,6 +251,8 @@ class ProcessDaemon extends Command {
 
         $logger->debug('Entering Gearman Worker Loop');
 
+        $serverFailure = 0;
+
         // Gearman's Loop
         while (@$gearman->work()
                 || ($gearman->returnCode() == \GEARMAN_IO_WAIT)
@@ -302,12 +304,19 @@ class ProcessDaemon extends Command {
             } while (count($storage) >= self::MAX_STREAMS);
 
             if ($gearman->returnCode() == \GEARMAN_SUCCESS) {
+                $serverFailure = 0;
                 continue;
             }
 
             if (! @$gearman->wait()) {
                 if ($gearman->returnCode() == \GEARMAN_NO_ACTIVE_FDS) {
                     // No server connection, sleep before reconnect
+                    $serverFailure++;
+                    if ($serverFailure > 3) {
+                        $logger->warning('Invalid server state, restarting');
+                        exit;
+                    }
+
                     $logger->debug('No active server, sleep before retry');
                     sleep(5);
                     continue;
@@ -317,12 +326,12 @@ class ProcessDaemon extends Command {
                     // Job wait timeout, sleep before retry
                     sleep(1);
                     if (! @$gearman->echo('ping')) {
-                        $logger->debug('Invalid server state, restarting');
+                        $logger->warning('Invalid server state, restarting');
                         exit;
                     }
 
                     if (($healthCheck) && ((time() - $bootTime) > 10) && ((time() - $lastJob) > 10)) {
-                        $logger->info(
+                        $logger->debug(
                             'Inactivity detected, restarting',
                             [
                                 'runtime' => time() - $bootTime,
@@ -334,6 +343,8 @@ class ProcessDaemon extends Command {
 
                     continue;
                 }
+
+                $serverFailure = 0;
             }
         }
 
