@@ -145,10 +145,10 @@ class ProcessDaemon extends Command {
         $gearman->addFunction(
             $functionName,
             function (\GearmanJob $job) use ($logger, $devMode, &$storage, &$request, &$jobCount, &$lastJob) {
-                $logger->debug('Got a new job!');
+                $logger->info('Got a new job!', $job->workload());
                 $jobData = json_decode($job->workload(), true);
                 if ($jobData === null) {
-                    $logger->debug('Invalid Job Workload!');
+                    $logger->warning('Invalid Job Workload!');
                     $job->sendComplete('invalid');
 
                     return;
